@@ -61,7 +61,7 @@
       renderAuth(j.authGroups || []);
       // If channels are unsupported, surface it for debugging.
       if (j.channelsAddHelp && j.channelsAddHelp.indexOf('telegram') === -1) {
-        logEl.textContent += '\nNote: this clawdbot build does not list telegram in `channels add --help`.\n';
+        logEl.textContent += '\nNote: this clawdbot build does not list telegram in `channels add --help`. Telegram auto-add will be skipped.\n';
       }
 
     }).catch(function (e) {

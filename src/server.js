@@ -367,45 +367,65 @@ app.post("/setup/api/run", requireSetupAuth, async (req, res) => {
 
   let extra = "";
 
-  // Optional channel setup.
-  if (payload.telegramToken?.trim()) {
-    const r = await runCmd(CLAWDBOT_BIN, [
-      "channels",
-      "add",
-      "--channel",
-      "telegram",
-      "--token",
-      payload.telegramToken.trim()
-    ]);
-    extra += `\n[telegram] exit=${r.code}\n${r.output}`;
-  }
-  if (payload.discordToken?.trim()) {
-    const r = await runCmd(CLAWDBOT_BIN, [
-      "channels",
-      "add",
-      "--channel",
-      "discord",
-      "--token",
-      payload.discordToken.trim()
-    ]);
-    extra += `\n[discord] exit=${r.code}\n${r.output}`;
-  }
-  if (payload.slackBotToken?.trim() || payload.slackAppToken?.trim()) {
-    const args = ["channels", "add", "--channel", "slack"];
-    if (payload.slackBotToken?.trim()) args.push("--bot-token", payload.slackBotToken.trim());
-    if (payload.slackAppToken?.trim()) args.push("--app-token", payload.slackAppToken.trim());
-    const r = await runCmd(CLAWDBOT_BIN, args);
-    extra += `\n[slack] exit=${r.code}\n${r.output}`;
-  }
-
   const ok = onboard.code === 0 && isConfigured();
+
+  // Optional channel setup (only after successful onboarding, and only if the installed CLI supports it).
   if (ok) {
+    const channelsHelp = await runCmd(CLAWDBOT_BIN, ["channels", "add", "--help"]);
+    const helpText = channelsHelp.output || "";
+
+    const supports = (name) => helpText.includes(name);
+
+    if (payload.telegramToken?.trim()) {
+      if (!supports("telegram")) {
+        extra += "\n[telegram] skipped (this clawdbot build does not list telegram in `channels add --help`)\n";
+      } else {
+        const r = await runCmd(CLAWDBOT_BIN, [
+          "channels",
+          "add",
+          "--channel",
+          "telegram",
+          "--token",
+          payload.telegramToken.trim(),
+        ]);
+        extra += `\n[telegram] exit=${r.code}\n${r.output}`;
+      }
+    }
+
+    if (payload.discordToken?.trim()) {
+      if (!supports("discord")) {
+        extra += "\n[discord] skipped (this clawdbot build does not list discord in `channels add --help`)\n";
+      } else {
+        const r = await runCmd(CLAWDBOT_BIN, [
+          "channels",
+          "add",
+          "--channel",
+          "discord",
+          "--token",
+          payload.discordToken.trim(),
+        ]);
+        extra += `\n[discord] exit=${r.code}\n${r.output}`;
+      }
+    }
+
+    if (payload.slackBotToken?.trim() || payload.slackAppToken?.trim()) {
+      if (!supports("slack")) {
+        extra += "\n[slack] skipped (this clawdbot build does not list slack in `channels add --help`)\n";
+      } else {
+        const args = ["channels", "add", "--channel", "slack"];
+        if (payload.slackBotToken?.trim()) args.push("--bot-token", payload.slackBotToken.trim());
+        if (payload.slackAppToken?.trim()) args.push("--app-token", payload.slackAppToken.trim());
+        const r = await runCmd(CLAWDBOT_BIN, args);
+        extra += `\n[slack] exit=${r.code}\n${r.output}`;
+      }
+    }
+
     startGatewayIfNeeded();
   }
 
   return res.status(ok ? 200 : 500).json({
     ok,
-    output: `${onboard.output}${extra}`
+    output: `${onboard.output}${extra}`,
   });
 });
 
