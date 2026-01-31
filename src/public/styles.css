@@ -54,6 +54,17 @@ body {
   transition: background 0.2s, color 0.2s;
 }
 
+.logo {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+
+.logo svg {
+  width: 72px;
+  height: 72px;
+}
+
 .card {
   border: 1px solid var(--border-color);
   border-radius: 12px;
@@ -165,5 +176,13 @@ a:hover {
 
 h1, h2, h3 {
   color: var(--text-primary);
+}
+
+h1 {
+  text-align: center;
+}
+
+.subtitle {
+  text-align: center;
 }
 

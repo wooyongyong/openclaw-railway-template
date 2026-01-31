@@ -805,12 +805,32 @@ server.on("upgrade", async (req, socket, head) => {
   proxy.ws(req, socket, head, { target: GATEWAY_TARGET });
 });
 
-process.on("SIGTERM", () => {
-  console.log("[wrapper] received SIGTERM, shutting down");
-  try {
-    if (gatewayProc) gatewayProc.kill("SIGTERM");
-  } catch (err) {
-    console.warn(`[wrapper] error killing gateway: ${err.message}`);
+async function gracefulShutdown(signal) {
+  console.log(`[wrapper] received ${signal}, shutting down`);
+
+  if (setupRateLimiter.cleanupInterval) {
+    clearInterval(setupRateLimiter.cleanupInterval);
   }
+
+  server.close();
+
+  if (gatewayProc) {
+    try {
+      gatewayProc.kill("SIGTERM");
+      await Promise.race([
+        new Promise((resolve) => gatewayProc.on("exit", resolve)),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
+      if (gatewayProc && !gatewayProc.killed) {
+        gatewayProc.kill("SIGKILL");
+      }
+    } catch (err) {
+      console.warn(`[wrapper] error killing gateway: ${err.message}`);
+    }
+  }
+
   process.exit(0);
-});
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
