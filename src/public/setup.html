@@ -6,8 +6,17 @@
   <title>OpenClaw Setup</title>
   <link rel="stylesheet" href="/setup/styles.css" />
   <script>
+  (function() {
+    const saved = localStorage.getItem('theme');
+    if (saved) {
+      document.documentElement.setAttribute('data-theme', saved);
+    }
+  })();
+  </script>
+  <script>
   document.addEventListener('alpine:init', () => {
     Alpine.data('setupApp', () => ({
+      theme: localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'),
       status: 'Loading...',
       configured: false,
       openclawVersion: '',
@@ -34,6 +43,12 @@
 
       async init() {
         await this.refreshStatus();
+      },
+
+      toggleTheme() {
+        this.theme = this.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', this.theme);
+        localStorage.setItem('theme', this.theme);
       },
 
       async httpJson(url, opts = {}) {
@@ -165,7 +180,10 @@
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
 </head>
 <body x-data="setupApp()">
-  <h1>OpenClaw Setup</h1>
+  <div class="header-row">
+    <h1>OpenClaw Setup</h1>
+    <button @click="toggleTheme()" class="theme-toggle" x-text="theme === 'dark' ? 'Light mode' : 'Dark mode'"></button>
+  </div>
   <p class="muted">This wizard configures OpenClaw by running the same onboarding command it uses in the terminal, but from the browser.</p>
 
   <div class="card">
@@ -271,18 +289,18 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: var(--overlay-bg);
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 1000;
     }
     .modal {
-      background: #1a1a2e;
+      background: var(--modal-bg);
       padding: 1.5rem;
       border-radius: 8px;
       min-width: 300px;
-      border: 1px solid #333;
+      border: 1px solid var(--modal-border);
     }
     .modal h3 {
       margin-top: 0;
