@@ -1,5 +1,5 @@
 FROM node:22-bookworm
-
+ARG CACHE_BUST=2
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
  ca-certificates \
