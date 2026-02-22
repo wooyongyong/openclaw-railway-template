@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "[entrypoint] === v11 starting ==="
+echo "[entrypoint] === v12 starting ==="
 
 chown -R openclaw:openclaw /data
 chmod 700 /data
@@ -14,8 +14,9 @@ ln -sfn /data/.linuxbrew /home/linuxbrew/.linuxbrew
 
 STATE_DIR="${OPENCLAW_STATE_DIR:-/data/.openclaw}"
 CONFIG_FILE="$STATE_DIR/openclaw.json"
+ENTRY="/usr/local/lib/node_modules/openclaw/dist/entry.js"
 
-# 기존 config 삭제
+# 기존 config 삭제 (매 배포마다 깨끗하게)
 if [ -f "$CONFIG_FILE" ]; then
   echo "[entrypoint] removing existing config for clean setup"
   rm -f "$CONFIG_FILE"
@@ -51,6 +52,20 @@ if [ "$READY" = "true" ]; then
       "flow": "quickstart"
     }')
   echo "[entrypoint] setup result: $RESULT"
+
+  # 게이트웨이가 시작될 때까지 잠시 대기
+  echo "[entrypoint] waiting for gateway to start..."
+  sleep 15
+
+  # 디바이스 인증 비활성화 (Railway 프록시 환경에서 필수)
+  echo "[entrypoint] disabling device auth for Railway proxy..."
+  gosu openclaw node $ENTRY config set gateway.controlUi.dangerouslyDisableDeviceAuth true 2>&1 || true
+
+  # Railway CGNAT 대역을 trustedProxies에 추가
+  echo "[entrypoint] adding Railway proxy to trusted proxies..."
+  gosu openclaw node $ENTRY config set --json gateway.trustedProxies '["loopback","private","100.64.0.0/10"]' 2>&1 || true
+
+  echo "[entrypoint] config updates applied"
 else
   echo "[entrypoint] ERROR: wrapper did not become ready in 60s"
 fi
