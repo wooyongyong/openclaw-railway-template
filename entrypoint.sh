@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "[entrypoint] === v10 starting ==="
+echo "[entrypoint] === v11 starting ==="
 
 chown -R openclaw:openclaw /data
 chmod 700 /data
@@ -21,11 +21,6 @@ if [ -f "$CONFIG_FILE" ]; then
   rm -f "$CONFIG_FILE"
 fi
 
-# 디버그
-echo "[entrypoint] GEMINI_API_KEY set: $([ -n "$GEMINI_API_KEY" ] && echo YES || echo NO)"
-echo "[entrypoint] TELEGRAM_BOT_TOKEN set: $([ -n "$TELEGRAM_BOT_TOKEN" ] && echo YES || echo NO)"
-echo "[entrypoint] SETUP_PASSWORD set: $([ -n "$SETUP_PASSWORD" ] && echo YES || echo NO)"
-
 # wrapper를 백그라운드로 시작
 gosu openclaw node src/server.js &
 NODE_PID=$!
@@ -44,27 +39,18 @@ for i in $(seq 1 30); do
 done
 
 if [ "$READY" = "true" ]; then
-  # 값 설정 (환경변수 또는 하드코딩 기본값)
-  API_KEY="${GEMINI_API_KEY}"
-  TELEGRAM="${TELEGRAM_BOT_TOKEN}"
-  PASS="${SETUP_PASSWORD}"
-
-  if [ -z "$API_KEY" ]; then
-    echo "[entrypoint] ERROR: GEMINI_API_KEY is not set!"
-  else
-    echo "[entrypoint] calling /setup/api/run ..."
-    RESULT=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST http://localhost:8080/setup/api/run \
-      -u ":${PASS}" \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"authChoice\": \"gemini-api-key\",
-        \"authSecret\": \"${API_KEY}\",
-        \"model\": \"google/gemini-2.0-flash\",
-        \"telegramToken\": \"${TELEGRAM}\",
-        \"flow\": \"quickstart\"
-      }")
-    echo "[entrypoint] setup result: $RESULT"
-  fi
+  echo "[entrypoint] calling /setup/api/run ..."
+  RESULT=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST http://localhost:8080/setup/api/run \
+    -u ":${SETUP_PASSWORD}" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "authChoice": "gemini-api-key",
+      "authSecret": "AIzaSyBxy-Oif5KxzwMMIjtMM57z6Q4hll1OQJk",
+      "model": "google/gemini-2.0-flash",
+      "telegramToken": "8355049814:AAEZwbNrmOyo81thKbjjRtDio4wa1rt-VE8",
+      "flow": "quickstart"
+    }')
+  echo "[entrypoint] setup result: $RESULT"
 else
   echo "[entrypoint] ERROR: wrapper did not become ready in 60s"
 fi
