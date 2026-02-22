@@ -10,62 +10,38 @@ fi
 rm -rf /home/linuxbrew/.linuxbrew
 ln -sfn /data/.linuxbrew /home/linuxbrew/.linuxbrew
 
-# ============================================
-# 자동 설정: openclaw CLI로 onboard + config
-# server.js의 /setup/api/run과 동일한 방식
-# ============================================
-STATE_DIR="${OPENCLAW_STATE_DIR:-/data/.openclaw}"
-WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
-CONFIG_FILE="$STATE_DIR/openclaw.json"
-ENTRY="${OPENCLAW_ENTRY:-/usr/local/lib/node_modules/openclaw/dist/entry.js}"
-GW_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-$(openssl rand -hex 32)}"
-GW_PORT="${INTERNAL_GATEWAY_PORT:-18789}"
-
 # 이전에 잘못 만든 config 삭제
+STATE_DIR="${OPENCLAW_STATE_DIR:-/data/.openclaw}"
+CONFIG_FILE="$STATE_DIR/openclaw.json"
 if [ -f "$CONFIG_FILE" ] && grep -q '"version"' "$CONFIG_FILE" 2>/dev/null; then
   rm -f "$CONFIG_FILE"
 fi
 
+# 자동 설정: wrapper 시작 후 /setup API 호출
 if [ "${OPENCLAW_AUTO_CONFIG}" = "true" ] && [ ! -f "$CONFIG_FILE" ]; then
-  mkdir -p "$STATE_DIR" "$WORKSPACE_DIR"
-  chown -R openclaw:openclaw "$STATE_DIR" "$WORKSPACE_DIR"
+  (
+    # wrapper가 준비될 때까지 대기
+    for i in $(seq 1 30); do
+      if curl -sf http://localhost:8080/setup/healthz > /dev/null 2>&1; then
+        break
+      fi
+      sleep 2
+    done
 
-  # Step 1: openclaw onboard (server.js buildOnboardArgs와 동일)
-  ONBOARD_CMD="node $ENTRY onboard --non-interactive --accept-risk --json --no-install-daemon --skip-health --workspace $WORKSPACE_DIR --gateway-bind loopback --gateway-port $GW_PORT --gateway-auth token --gateway-token $GW_TOKEN --flow quickstart"
+    # /setup/api/run 호출 (웹 UI의 Run Setup과 동일)
+    curl -s -X POST http://localhost:8080/setup/api/run \
+      -H "Content-Type: application/json" \
+      -H "X-Setup-Password: ${SETUP_PASSWORD}" \
+      -d "{
+        \"authChoice\": \"${OPENCLAW_AUTH_CHOICE}\",
+        \"authSecret\": \"${OPENCLAW_AUTH_SECRET}\",
+        \"model\": \"${OPENCLAW_MODEL}\",
+        \"telegramToken\": \"${OPENCLAW_TELEGRAM_TOKEN}\",
+        \"flow\": \"quickstart\"
+      }" > /tmp/setup-result.json 2>&1
 
-  if [ -n "$OPENCLAW_AUTH_CHOICE" ] && [ -n "$OPENCLAW_AUTH_SECRET" ]; then
-    ONBOARD_CMD="$ONBOARD_CMD --auth-choice $OPENCLAW_AUTH_CHOICE"
-    case "$OPENCLAW_AUTH_CHOICE" in
-      gemini-api-key)    ONBOARD_CMD="$ONBOARD_CMD --gemini-api-key $OPENCLAW_AUTH_SECRET" ;;
-      apiKey)            ONBOARD_CMD="$ONBOARD_CMD --anthropic-api-key $OPENCLAW_AUTH_SECRET" ;;
-      openai-api-key)    ONBOARD_CMD="$ONBOARD_CMD --openai-api-key $OPENCLAW_AUTH_SECRET" ;;
-      openrouter-api-key) ONBOARD_CMD="$ONBOARD_CMD --openrouter-api-key $OPENCLAW_AUTH_SECRET" ;;
-    esac
-  fi
-
-  export OPENCLAW_STATE_DIR="$STATE_DIR"
-  export OPENCLAW_WORKSPACE_DIR="$WORKSPACE_DIR"
-
-  gosu openclaw $ONBOARD_CMD > /tmp/onboard.log 2>&1
-  ONBOARD_EXIT=$?
-  cat /tmp/onboard.log >&2
-
-  if [ $ONBOARD_EXIT -eq 0 ] && [ -f "$CONFIG_FILE" ]; then
-    # Step 2: gateway config (server.js와 동일)
-    gosu openclaw node "$ENTRY" config set gateway.controlUi.allowInsecureAuth true 2>&1
-    gosu openclaw node "$ENTRY" config set gateway.auth.token "$GW_TOKEN" 2>&1
-    gosu openclaw node "$ENTRY" config set --json gateway.trustedProxies '["127.0.0.1"]' 2>&1
-
-    # Step 3: model 설정
-    if [ -n "$OPENCLAW_MODEL" ]; then
-      gosu openclaw node "$ENTRY" models set "$OPENCLAW_MODEL" 2>&1
-    fi
-
-    # Step 4: Telegram 설정
-    if [ -n "$OPENCLAW_TELEGRAM_TOKEN" ]; then
-      gosu openclaw node "$ENTRY" config set --json channels.telegram "{\"enabled\":true,\"botToken\":\"$OPENCLAW_TELEGRAM_TOKEN\",\"dmPolicy\":\"pairing\",\"groupPolicy\":\"allowlist\",\"streamMode\":\"partial\"}" 2>&1
-    fi
-  fi
+    cat /tmp/setup-result.json >&2
+  ) &
 fi
 
 exec gosu openclaw node src/server.js
