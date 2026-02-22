@@ -28,10 +28,10 @@ if [ "${OPENCLAW_AUTO_CONFIG}" = "true" ] && [ ! -f "$CONFIG_FILE" ]; then
       sleep 2
     done
 
-    # /setup/api/run 호출 (웹 UI의 Run Setup과 동일)
+    # /setup/api/run 호출 - HTTP Basic Auth 사용 (username 비워두고 password만)
     curl -s -X POST http://localhost:8080/setup/api/run \
+      -u ":${SETUP_PASSWORD}" \
       -H "Content-Type: application/json" \
-      -H "X-Setup-Password: ${SETUP_PASSWORD}" \
       -d "{
         \"authChoice\": \"${OPENCLAW_AUTH_CHOICE}\",
         \"authSecret\": \"${OPENCLAW_AUTH_SECRET}\",
