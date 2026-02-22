@@ -19,7 +19,7 @@ STATE_DIR="${OPENCLAW_STATE_DIR:-/data/.openclaw}"
 CONFIG_FILE="$STATE_DIR/openclaw.json"
 ENTRY="/usr/local/lib/node_modules/openclaw/dist/entry.js"
 
-if [ "${OPENCLAW_AUTO_CONFIG}" = "true" ] && [ ! -f "$CONFIG_FILE" ]; then
+if [ "${OPENCLAW_AUTO_CONFIG}" = "true" ]; then
   echo "[entrypoint] Auto-configuring OpenClaw..."
 
   mkdir -p "$STATE_DIR"
