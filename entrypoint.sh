@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "[entrypoint] === v12 starting ==="
+echo "[entrypoint] === v13 starting ==="
 
 chown -R openclaw:openclaw /data
 chmod 700 /data
@@ -14,34 +14,64 @@ ln -sfn /data/.linuxbrew /home/linuxbrew/.linuxbrew
 
 STATE_DIR="${OPENCLAW_STATE_DIR:-/data/.openclaw}"
 CONFIG_FILE="$STATE_DIR/openclaw.json"
-ENTRY="/usr/local/lib/node_modules/openclaw/dist/entry.js"
 
-# 기존 config 삭제 (매 배포마다 깨끗하게)
-if [ -f "$CONFIG_FILE" ]; then
-  echo "[entrypoint] removing existing config for clean setup"
-  rm -f "$CONFIG_FILE"
-fi
+# config이 이미 있고 유효하면 재사용 (볼륨에 저장된 설정)
+if [ -f "$CONFIG_FILE" ] && node -e "JSON.parse(require('fs').readFileSync('$CONFIG_FILE','utf8')).gateway" 2>/dev/null; then
+  echo "[entrypoint] existing valid config found, reusing it"
 
-# wrapper를 백그라운드로 시작
-gosu openclaw node src/server.js &
-NODE_PID=$!
-trap "kill -TERM $NODE_PID; wait $NODE_PID" TERM INT
+  # Railway proxy 패치가 안 되어있으면 추가
+  node -e "
+    const fs = require('fs');
+    const config = JSON.parse(fs.readFileSync('$CONFIG_FILE', 'utf8'));
+    let changed = false;
 
-# wrapper 준비 대기
-echo "[entrypoint] waiting for wrapper to be ready..."
-READY="false"
-for i in $(seq 1 30); do
-  if curl -sf http://localhost:8080/setup/healthz > /dev/null 2>&1; then
-    echo "[entrypoint] wrapper is ready!"
-    READY="true"
-    break
-  fi
-  sleep 2
-done
+    if (!config.gateway) config.gateway = {};
+    if (!config.gateway.controlUi) config.gateway.controlUi = {};
+    if (!config.gateway.controlUi.dangerouslyDisableDeviceAuth) {
+      config.gateway.controlUi.dangerouslyDisableDeviceAuth = true;
+      changed = true;
+    }
+    if (!config.gateway.trustedProxies) config.gateway.trustedProxies = [];
+    if (!config.gateway.trustedProxies.includes('100.64.0.0/10')) {
+      config.gateway.trustedProxies.push('100.64.0.0/10');
+      changed = true;
+    }
 
-if [ "$READY" = "true" ]; then
+    if (changed) {
+      fs.writeFileSync('$CONFIG_FILE', JSON.stringify(config, null, 2));
+      console.log('[entrypoint] config patched with Railway proxy settings');
+    } else {
+      console.log('[entrypoint] config already has Railway proxy settings');
+    }
+  " 2>&1
+  chown openclaw:openclaw "$CONFIG_FILE"
+
+  # wrapper 시작 (이미 설정됨 -> 바로 게이트웨이 시작)
+  exec gosu openclaw node src/server.js
+
+else
+  echo "[entrypoint] no valid config, running fresh setup..."
+
+  # 잘못된 config 삭제
+  [ -f "$CONFIG_FILE" ] && rm -f "$CONFIG_FILE"
+
+  # wrapper를 백그라운드로 시작
+  gosu openclaw node src/server.js &
+  NODE_PID=$!
+  trap "kill -TERM $NODE_PID; wait $NODE_PID" TERM INT
+
+  # wrapper 준비 대기
+  echo "[entrypoint] waiting for wrapper to be ready..."
+  for i in $(seq 1 30); do
+    if curl -sf http://localhost:8080/setup/healthz > /dev/null 2>&1; then
+      echo "[entrypoint] wrapper is ready!"
+      break
+    fi
+    sleep 2
+  done
+
   echo "[entrypoint] calling /setup/api/run ..."
-  RESULT=$(curl -s -w "\nHTTP_CODE:%{http_code}" -X POST http://localhost:8080/setup/api/run \
+  curl -s -X POST http://localhost:8080/setup/api/run \
     -u ":${SETUP_PASSWORD}" \
     -H "Content-Type: application/json" \
     -d '{
@@ -50,25 +80,28 @@ if [ "$READY" = "true" ]; then
       "model": "google/gemini-2.0-flash",
       "telegramToken": "8355049814:AAEZwbNrmOyo81thKbjjRtDio4wa1rt-VE8",
       "flow": "quickstart"
-    }')
-  echo "[entrypoint] setup result: $RESULT"
+    }' > /tmp/setup-result.json 2>&1
+  echo "[entrypoint] setup result: $(cat /tmp/setup-result.json)"
 
-  # 게이트웨이가 시작될 때까지 잠시 대기
-  echo "[entrypoint] waiting for gateway to start..."
-  sleep 15
+  # config 파일 패치
+  if [ -f "$CONFIG_FILE" ]; then
+    echo "[entrypoint] patching config for Railway proxy..."
+    node -e "
+      const fs = require('fs');
+      const config = JSON.parse(fs.readFileSync('$CONFIG_FILE', 'utf8'));
+      if (!config.gateway) config.gateway = {};
+      if (!config.gateway.controlUi) config.gateway.controlUi = {};
+      config.gateway.controlUi.dangerouslyDisableDeviceAuth = true;
+      if (!config.gateway.trustedProxies) config.gateway.trustedProxies = [];
+      if (!config.gateway.trustedProxies.includes('100.64.0.0/10')) {
+        config.gateway.trustedProxies.push('100.64.0.0/10');
+      }
+      fs.writeFileSync('$CONFIG_FILE', JSON.stringify(config, null, 2));
+      console.log('[entrypoint] config patched successfully');
+    " 2>&1
+    chown openclaw:openclaw "$CONFIG_FILE"
+  fi
 
-  # 디바이스 인증 비활성화 (Railway 프록시 환경에서 필수)
-  echo "[entrypoint] disabling device auth for Railway proxy..."
-  gosu openclaw node $ENTRY config set gateway.controlUi.dangerouslyDisableDeviceAuth true 2>&1 || true
-
-  # Railway CGNAT 대역을 trustedProxies에 추가
-  echo "[entrypoint] adding Railway proxy to trusted proxies..."
-  gosu openclaw node $ENTRY config set --json gateway.trustedProxies '["loopback","private","100.64.0.0/10"]' 2>&1 || true
-
-  echo "[entrypoint] config updates applied"
-else
-  echo "[entrypoint] ERROR: wrapper did not become ready in 60s"
+  echo "[entrypoint] setup done, waiting for node..."
+  wait $NODE_PID
 fi
-
-echo "[entrypoint] setup phase complete, waiting for node..."
-wait $NODE_PID
