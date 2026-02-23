@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "[entrypoint] === v17 starting ==="
+echo "[entrypoint] === v18 starting ==="
 
 # ---- 기본 설정 ----
 chown -R openclaw:openclaw /data
@@ -16,18 +16,13 @@ CONFIG_FILE="$STATE_DIR/openclaw.json"
 SECRETS_FILE="/data/.secrets"
 
 # ---- 시크릿 로드: 환경변수 우선, 파일 폴백 ----
-# Railway Variables 탭에서 설정하거나, /data/.secrets 파일에서 읽음
 if [ -f "$SECRETS_FILE" ]; then
-    echo "[entrypoint] reading secrets from file..."
+    echo "[entrypoint] secrets file found, using as fallback..."
     [ -z "$GEMINI_KEY" ] && GEMINI_KEY=$(grep '^GEMINI_KEY=' "$SECRETS_FILE" | cut -d'=' -f2-)
     [ -z "$TELEGRAM_TOKEN" ] && TELEGRAM_TOKEN=$(grep '^TELEGRAM_TOKEN=' "$SECRETS_FILE" | cut -d'=' -f2-)
-    [ -z "$CLAUDE_KEY" ] && CLAUDE_KEY=$(grep '^CLAUDE_KEY=' "$SECRETS_FILE" | cut -d'=' -f2-)
-    [ -z "$PERPLEXITY_KEY" ] && PERPLEXITY_KEY=$(grep '^PERPLEXITY_KEY=' "$SECRETS_FILE" | cut -d'=' -f2-)
 fi
 echo "[entrypoint] GEMINI_KEY loaded: $([ -n "$GEMINI_KEY" ] && echo YES || echo NO)"
 echo "[entrypoint] TELEGRAM_TOKEN loaded: $([ -n "$TELEGRAM_TOKEN" ] && echo YES || echo NO)"
-echo "[entrypoint] CLAUDE_KEY loaded: $([ -n "$CLAUDE_KEY" ] && echo YES || echo NO)"
-echo "[entrypoint] PERPLEXITY_KEY loaded: $([ -n "$PERPLEXITY_KEY" ] && echo YES || echo NO)"
 
 # ---- config 패치 함수 ----
 patch_config() {
@@ -36,6 +31,8 @@ patch_config() {
         const fs = require('fs');
         const config = JSON.parse(fs.readFileSync('$CONFIG_FILE', 'utf8'));
         let changed = false;
+
+        // ---- gateway UI 설정 ----
         if (!config.gateway) config.gateway = {};
         if (!config.gateway.controlUi) config.gateway.controlUi = {};
         if (!config.gateway.controlUi.dangerouslyDisableDeviceAuth) {
@@ -77,42 +74,16 @@ patch_config() {
             }
         }
 
-        // ---- Claude API 키 추가 ----
-        if ('$CLAUDE_KEY' && '$CLAUDE_KEY' !== '') {
-            if (!config.auth) config.auth = {};
-            if (!config.auth.providers) config.auth.providers = {};
-            config.auth.providers['anthropic-api-key'] = {
-                authSecret: '$CLAUDE_KEY',
-                model: 'anthropic/claude-sonnet-4-20250514'
-            };
-            changed = true;
-            console.log('[entrypoint] Claude API key configured');
-        }
-
-        // ---- Perplexity API 키 추가 ----
-        if ('$PERPLEXITY_KEY' && '$PERPLEXITY_KEY' !== '') {
-            if (!config.auth) config.auth = {};
-            if (!config.auth.providers) config.auth.providers = {};
-            config.auth.providers['perplexity-api-key'] = {
-                authSecret: '$PERPLEXITY_KEY',
-                model: 'perplexity/sonar-pro'
-            };
-            changed = true;
-            console.log('[entrypoint] Perplexity API key configured');
-        }
-
-        // ---- 폴백 순서: Gemini -> Perplexity -> Claude ----
-        const fallbackOrder = [];
+        // ---- v17에서 추가된 잘못된 키 정리 ----
         if (config.auth && config.auth.providers) {
-            if (config.auth.providers['gemini-api-key']) fallbackOrder.push('gemini-api-key');
-            if (config.auth.providers['perplexity-api-key']) fallbackOrder.push('perplexity-api-key');
-            if (config.auth.providers['anthropic-api-key']) fallbackOrder.push('anthropic-api-key');
-        }
-        if (fallbackOrder.length > 1) {
-            if (!config.auth.fallback) config.auth.fallback = {};
-            config.auth.fallback.order = fallbackOrder;
+            delete config.auth.providers;
             changed = true;
-            console.log('[entrypoint] fallback order set:', fallbackOrder.join(' -> '));
+            console.log('[entrypoint] removed invalid auth.providers key');
+        }
+        if (config.auth && config.auth.fallback) {
+            delete config.auth.fallback;
+            changed = true;
+            console.log('[entrypoint] removed invalid auth.fallback key');
         }
 
         if (changed) {
@@ -136,8 +107,7 @@ fi
 # ---- 시크릿 확인 ----
 if [ -z "$GEMINI_KEY" ] || [ -z "$TELEGRAM_TOKEN" ]; then
     echo "[entrypoint] ERROR: secrets not available. Cannot run setup."
-    echo "[entrypoint] Set GEMINI_KEY and TELEGRAM_TOKEN in Railway Variables tab."
-    echo "[entrypoint] Starting wrapper in setup-only mode..."
+    echo "[entrypoint] Please set GEMINI_KEY and TELEGRAM_TOKEN env vars."
     exec gosu openclaw node src/server.js
 fi
 
@@ -163,11 +133,11 @@ curl -s -X POST http://localhost:8080/setup/api/run \
     -u ":${SETUP_PASSWORD}" \
     -H "Content-Type: application/json" \
     -d "{
-        \"authChoice\": \"gemini-api-key\",
-        \"authSecret\": \"${GEMINI_KEY}\",
-        \"model\": \"google/gemini-2.0-flash\",
-        \"telegramToken\": \"${TELEGRAM_TOKEN}\",
-        \"flow\": \"quickstart\"
+        \\"authChoice\\": \\"gemini-api-key\\",
+        \\"authSecret\\": \\"${GEMINI_KEY}\\",
+        \\"model\\": \\"google/gemini-2.0-flash\\",
+        \\"telegramToken\\": \\"${TELEGRAM_TOKEN}\\",
+        \\"flow\\": \\"quickstart\\"
     }" > /tmp/setup-result.json 2>&1
 
 echo "[entrypoint] setup result: $(cat /tmp/setup-result.json)"
