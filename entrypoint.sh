@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "[entrypoint] === v16 starting ==="
+echo "[entrypoint] === v17 starting ==="
 
 # ---- 기본 설정 ----
 chown -R openclaw:openclaw /data
@@ -15,37 +15,19 @@ STATE_DIR="${OPENCLAW_STATE_DIR:-/data/.openclaw}"
 CONFIG_FILE="$STATE_DIR/openclaw.json"
 SECRETS_FILE="/data/.secrets"
 
-# ---- 시크릿 파일에서 키 읽기 ----
-# 키는 /data/.secrets 파일에 저장됨 (볼륨이므로 GitHub에 노출 안됨)
-# 파일 형식:
-#   GEMINI_KEY=AIzaSy...
-#   TELEGRAM_TOKEN=8355...
-#   CLAUDE_KEY=sk-ant-api03-...
-#   PERPLEXITY_KEY=pplx-...
+# ---- 시크릿 로드: 환경변수 우선, 파일 폴백 ----
+# Railway Variables 탭에서 설정하거나, /data/.secrets 파일에서 읽음
 if [ -f "$SECRETS_FILE" ]; then
-    echo "[entrypoint] reading secrets from volume..."
-    GEMINI_KEY=$(grep '^GEMINI_KEY=' "$SECRETS_FILE" | cut -d'=' -f2-)
-    TELEGRAM_TOKEN=$(grep '^TELEGRAM_TOKEN=' "$SECRETS_FILE" | cut -d'=' -f2-)
-    CLAUDE_KEY=$(grep '^CLAUDE_KEY=' "$SECRETS_FILE" | cut -d'=' -f2-)
-    PERPLEXITY_KEY=$(grep '^PERPLEXITY_KEY=' "$SECRETS_FILE" | cut -d'=' -f2-)
-    echo "[entrypoint] GEMINI_KEY loaded: $([ -n "$GEMINI_KEY" ] && echo YES || echo NO)"
-    echo "[entrypoint] TELEGRAM_TOKEN loaded: $([ -n "$TELEGRAM_TOKEN" ] && echo YES || echo NO)"
-    echo "[entrypoint] CLAUDE_KEY loaded: $([ -n "$CLAUDE_KEY" ] && echo YES || echo NO)"
-    echo "[entrypoint] PERPLEXITY_KEY loaded: $([ -n "$PERPLEXITY_KEY" ] && echo YES || echo NO)"
-else
-    echo "[entrypoint] WARNING: /data/.secrets not found!"
-    echo "[entrypoint] To create it, use Railway shell:"
-    echo "[entrypoint]   railway shell"
-    echo "[entrypoint]   echo 'GEMINI_KEY=your_key_here' > /data/.secrets"
-    echo "[entrypoint]   echo 'TELEGRAM_TOKEN=your_token_here' >> /data/.secrets"
-    echo "[entrypoint]   echo 'CLAUDE_KEY=your_key_here' >> /data/.secrets"
-    echo "[entrypoint]   echo 'PERPLEXITY_KEY=your_key_here' >> /data/.secrets"
-    echo "[entrypoint]   chmod 600 /data/.secrets"
-    GEMINI_KEY=""
-    TELEGRAM_TOKEN=""
-    CLAUDE_KEY=""
-    PERPLEXITY_KEY=""
+    echo "[entrypoint] reading secrets from file..."
+    [ -z "$GEMINI_KEY" ] && GEMINI_KEY=$(grep '^GEMINI_KEY=' "$SECRETS_FILE" | cut -d'=' -f2-)
+    [ -z "$TELEGRAM_TOKEN" ] && TELEGRAM_TOKEN=$(grep '^TELEGRAM_TOKEN=' "$SECRETS_FILE" | cut -d'=' -f2-)
+    [ -z "$CLAUDE_KEY" ] && CLAUDE_KEY=$(grep '^CLAUDE_KEY=' "$SECRETS_FILE" | cut -d'=' -f2-)
+    [ -z "$PERPLEXITY_KEY" ] && PERPLEXITY_KEY=$(grep '^PERPLEXITY_KEY=' "$SECRETS_FILE" | cut -d'=' -f2-)
 fi
+echo "[entrypoint] GEMINI_KEY loaded: $([ -n "$GEMINI_KEY" ] && echo YES || echo NO)"
+echo "[entrypoint] TELEGRAM_TOKEN loaded: $([ -n "$TELEGRAM_TOKEN" ] && echo YES || echo NO)"
+echo "[entrypoint] CLAUDE_KEY loaded: $([ -n "$CLAUDE_KEY" ] && echo YES || echo NO)"
+echo "[entrypoint] PERPLEXITY_KEY loaded: $([ -n "$PERPLEXITY_KEY" ] && echo YES || echo NO)"
 
 # ---- config 패치 함수 ----
 patch_config() {
@@ -154,7 +136,7 @@ fi
 # ---- 시크릿 확인 ----
 if [ -z "$GEMINI_KEY" ] || [ -z "$TELEGRAM_TOKEN" ]; then
     echo "[entrypoint] ERROR: secrets not available. Cannot run setup."
-    echo "[entrypoint] Please create /data/.secrets file first."
+    echo "[entrypoint] Set GEMINI_KEY and TELEGRAM_TOKEN in Railway Variables tab."
     echo "[entrypoint] Starting wrapper in setup-only mode..."
     exec gosu openclaw node src/server.js
 fi
