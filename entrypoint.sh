@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "[entrypoint] === v18 starting ==="
+echo "[entrypoint] === v19 starting ==="
 
 # ---- 기본 설정 ----
 chown -R openclaw:openclaw /data
@@ -21,8 +21,8 @@ if [ -f "$SECRETS_FILE" ]; then
     [ -z "$GEMINI_KEY" ] && GEMINI_KEY=$(grep '^GEMINI_KEY=' "$SECRETS_FILE" | cut -d'=' -f2-)
     [ -z "$TELEGRAM_TOKEN" ] && TELEGRAM_TOKEN=$(grep '^TELEGRAM_TOKEN=' "$SECRETS_FILE" | cut -d'=' -f2-)
 fi
-echo "[entrypoint] GEMINI_KEY loaded: $([ -n "$GEMINI_KEY" ] && echo YES || echo NO)"
-echo "[entrypoint] TELEGRAM_TOKEN loaded: $([ -n "$TELEGRAM_TOKEN" ] && echo YES || echo NO)"
+echo "[entrypoint] GEMINI_KEY loaded: $([ -n \"$GEMINI_KEY\" ] && echo YES || echo NO)"
+echo "[entrypoint] TELEGRAM_TOKEN loaded: $([ -n \"$TELEGRAM_TOKEN\" ] && echo YES || echo NO)"
 
 # ---- config 패치 함수 ----
 patch_config() {
@@ -74,16 +74,14 @@ patch_config() {
             }
         }
 
-        // ---- v17에서 추가된 잘못된 키 정리 ----
+        // ---- 잘못된 키 정리 ----
         if (config.auth && config.auth.providers) {
             delete config.auth.providers;
             changed = true;
-            console.log('[entrypoint] removed invalid auth.providers key');
         }
         if (config.auth && config.auth.fallback) {
             delete config.auth.fallback;
             changed = true;
-            console.log('[entrypoint] removed invalid auth.fallback key');
         }
 
         if (changed) {
@@ -133,11 +131,11 @@ curl -s -X POST http://localhost:8080/setup/api/run \
     -u ":${SETUP_PASSWORD}" \
     -H "Content-Type: application/json" \
     -d "{
-        \\"authChoice\\": \\"gemini-api-key\\",
-        \\"authSecret\\": \\"${GEMINI_KEY}\\",
-        \\"model\\": \\"google/gemini-2.0-flash\\",
-        \\"telegramToken\\": \\"${TELEGRAM_TOKEN}\\",
-        \\"flow\\": \\"quickstart\\"
+        \"authChoice\": \"gemini-api-key\",
+        \"authSecret\": \"${GEMINI_KEY}\",
+        \"model\": \"google/gemini-2.0-flash\",
+        \"telegramToken\": \"${TELEGRAM_TOKEN}\",
+        \"flow\": \"quickstart\"
     }" > /tmp/setup-result.json 2>&1
 
 echo "[entrypoint] setup result: $(cat /tmp/setup-result.json)"
