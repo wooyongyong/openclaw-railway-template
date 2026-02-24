@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# v22 - Fixed: removed set -e, fixed HOME path
-echo "=== OpenClaw Railway Entrypoint v22 ==="
+# v23 - Correct OpenClaw config schema
+echo "=== OpenClaw Railway Entrypoint v23 ==="
 echo "Starting at $(date -u)"
 
 # Directories
@@ -16,7 +16,7 @@ CONFIG_FILE="$OPENCLAW_STATE_DIR/openclaw.json"
 # Resolve gateway port
 GW_PORT="${INTERNAL_GATEWAY_PORT:-8080}"
 
-# Build openclaw.json using node
+# Build openclaw.json using node with correct schema
 echo "Building config..."
 node -e "
 const fs = require('fs');
@@ -34,45 +34,56 @@ const config = {
                               },
                                   trustedProxies: ['loopback', 'private', '100.64.0.0/10']
                                     },
-                                      agents: {
-                                          main: {
-                                                model: 'google/gemini-2.0-flash'
-                                                    }
-                                                      },
-                                                        channels: {},
-                                                          browser: {
-                                                              defaultProfile: 'openclaw',
-                                                                  profiles: {
-                                                                        openclaw: {
-                                                                                headless: true,
-                                                                                        noSandbox: true
-                                                                                              }
-                                                                                                  }
-                                                                                                    }
-                                                                                                    };
-                                                                                                    
-                                                                                                    if (geminiKey) {
-                                                                                                      config.auth = { google: { apiKey: geminiKey } };
-                                                                                                      }
-                                                                                                      
-                                                                                                      if (telegramToken) {
-                                                                                                        config.channels.telegram = { default: { botToken: telegramToken } };
-                                                                                                        }
-                                                                                                        
-                                                                                                        const configPath = process.argv[1];
-                                                                                                        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-                                                                                                        console.log('Config written to ' + configPath);
-                                                                                                        " "$CONFIG_FILE"
-                                                                                                        
-                                                                                                        # Setup HOME and openclaw config directory
-                                                                                                        export HOME="/home/openclaw"
-                                                                                                        mkdir -p "$HOME/.openclaw"
-                                                                                                        cp "$CONFIG_FILE" "$HOME/.openclaw/openclaw.json" || true
-                                                                                                        
-                                                                                                        echo "Config ready at $CONFIG_FILE"
-                                                                                                        echo "Browser profile: openclaw (headless Playwright)"
-                                                                                                        echo "Gateway port: $GW_PORT"
-                                                                                                        
-                                                                                                        # Start gateway
-                                                                                                        echo "=== Starting OpenClaw Gateway ==="
-                                                                                                        exec openclaw gateway --port "$GW_PORT"
+                                      models: {
+                                          providers: {},
+                                              defaults: {}
+                                                },
+                                                  agents: {
+                                                      defaults: {
+                                                            model: {
+                                                                    primary: 'google/gemini-2.0-flash'
+                                                                          }
+                                                                              }
+                                                                                },
+                                                                                  channels: {},
+                                                                                    browser: {
+                                                                                        defaultProfile: 'openclaw',
+                                                                                            profiles: {
+                                                                                                  openclaw: {
+                                                                                                          color: '#FF6600'
+                                                                                                                }
+                                                                                                                    }
+                                                                                                                      }
+                                                                                                                      };
+                                                                                                                      
+                                                                                                                      if (geminiKey) {
+                                                                                                                        config.models.providers.google = {
+                                                                                                                            apiKey: geminiKey,
+                                                                                                                                api: 'google-generative-ai'
+                                                                                                                                  };
+                                                                                                                                  }
+                                                                                                                                  
+                                                                                                                                  if (telegramToken) {
+                                                                                                                                    config.channels.telegram = {
+                                                                                                                                        enabled: true,
+                                                                                                                                            botToken: telegramToken,
+                                                                                                                                                dmPolicy: 'open'
+                                                                                                                                                  };
+                                                                                                                                                  }
+                                                                                                                                                  
+                                                                                                                                                  const configPath = process.argv[1];
+                                                                                                                                                  fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+                                                                                                                                                  console.log('Config written to ' + configPath);
+                                                                                                                                                  " "$CONFIG_FILE"
+                                                                                                                                                  
+                                                                                                                                                  # Setup HOME and openclaw config directory
+                                                                                                                                                  export HOME="/home/openclaw"
+                                                                                                                                                  mkdir -p "$HOME/.openclaw"
+                                                                                                                                                  cp "$CONFIG_FILE" "$HOME/.openclaw/openclaw.json" || true
+                                                                                                                                                  
+                                                                                                                                                  echo "Config ready at $CONFIG_FILE"
+                                                                                                                                                  echo "Gateway port: $GW_PORT"
+                                                                                                                                                  
+                                                                                                                                                  # Start gateway
+                                                                                                                                                  echo "=== Starting OpenClaw Gateway ==="
+                                                                                                                                                  exec openclaw gateway --port "$GW_PORT"
