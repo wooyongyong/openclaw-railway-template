@@ -1,11 +1,9 @@
 #!/bin/bash
 
-# v29 - Fix: use agents.defaults (not agent), use PORT for gateway
+# v30 - Fix: add gateway.mode=local (required by OpenClaw to start)
 # Based on official OpenClaw docs (docs.openclaw.ai/gateway/configuration-examples)
-# Fixes: 1) agent is legacy key -> use agents.defaults
-#        2) Port mismatch: use PORT env var to match Docker healthcheck
 
-echo "=== OpenClaw Railway Entrypoint v29 ==="
+echo "=== OpenClaw Railway Entrypoint v30 ==="
 echo "Starting at $(date -u)"
 
 # Directories
@@ -39,6 +37,7 @@ const config = {
   },
   channels: {},
   gateway: {
+    mode: 'local',
     port: port,
     bind: 'lan',
     controlUi: {
