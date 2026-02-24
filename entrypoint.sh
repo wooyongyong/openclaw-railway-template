@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# v24 - Fix all 5 config validation errors
-echo "=== OpenClaw Railway Entrypoint v24 ==="
+# v25 - Fix models array format (objects not strings)
+echo "=== OpenClaw Railway Entrypoint v25 ==="
 echo "Starting at $(date -u)"
 
 # Directories
@@ -61,7 +61,7 @@ if (geminiKey) {
     apiKey: geminiKey,
     api: 'google-generative-ai',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-    models: ['gemini-2.0-flash']
+    models: [{ name: 'gemini-2.0-flash' }]
   };
 }
 
