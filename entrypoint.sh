@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# v26 - Fix models.0.id field, use id instead of name
-echo "=== OpenClaw Railway Entrypoint v26 ==="
+# v27 - Fix models: need both id and name fields
+echo "=== OpenClaw Railway Entrypoint v27 ==="
 echo "Starting at $(date -u)"
 
 # Directories
@@ -61,7 +61,7 @@ if (geminiKey) {
     apiKey: geminiKey,
     api: 'google-generative-ai',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-    models: [{ id: 'gemini-2.0-flash' }]
+    models: [{ id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' }]
   };
 }
 
