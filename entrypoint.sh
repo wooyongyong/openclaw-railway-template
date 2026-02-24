@@ -1,10 +1,11 @@
 #!/bin/bash
 
-# v28 - Config based on official OpenClaw docs (docs.openclaw.ai)
-# Key changes: use 'agent' (singular), Google is built-in provider,
-# no browser section needed, minimal config approach
+# v29 - Fix: use agents.defaults (not agent), use PORT for gateway
+# Based on official OpenClaw docs (docs.openclaw.ai/gateway/configuration-examples)
+# Fixes: 1) agent is legacy key -> use agents.defaults
+#        2) Port mismatch: use PORT env var to match Docker healthcheck
 
-echo "=== OpenClaw Railway Entrypoint v28 ==="
+echo "=== OpenClaw Railway Entrypoint v29 ==="
 echo "Starting at $(date -u)"
 
 # Directories
@@ -16,22 +17,24 @@ mkdir -p "$OPENCLAW_STATE_DIR" "$OPENCLAW_WORKSPACE_DIR"
 # Config file location
 CONFIG_FILE="$OPENCLAW_STATE_DIR/openclaw.json"
 
-# Resolve gateway port
-GW_PORT="${INTERNAL_GATEWAY_PORT:-8080}"
+# Use PORT (matches Dockerfile healthcheck on 8080)
+GW_PORT="${PORT:-8080}"
 
-# Build openclaw.json using node (based on official config examples)
+# Build openclaw.json using node
 echo "Building config..."
 node -e "
 const fs = require('fs');
-const port = parseInt(process.env.INTERNAL_GATEWAY_PORT || '8080', 10);
+const port = parseInt(process.env.PORT || '8080', 10);
 const geminiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_KEY || '';
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_TOKEN || '';
 
 const config = {
-  agent: {
-    workspace: '/data/workspace',
-    model: {
-      primary: 'google/gemini-2.0-flash'
+  agents: {
+    defaults: {
+      workspace: '/data/workspace',
+      model: {
+        primary: 'google/gemini-2.0-flash'
+      }
     }
   },
   channels: {},
@@ -44,7 +47,7 @@ const config = {
   }
 };
 
-// Set Gemini API key via env section if available
+// Set Gemini API key via env section
 if (geminiKey) {
   config.env = {
     vars: {
