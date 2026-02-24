@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# v30 - Fix: add gateway.mode=local (required by OpenClaw to start)
-# Based on official OpenClaw docs (docs.openclaw.ai/gateway/configuration-examples)
+# v31 - Fix: add controlUi.dangerouslyAllowHostHeaderOriginFallback for non-loopback bind
+# Error was: non-loopback Control UI requires allowedOrigins or dangerouslyAllowHostHeaderOriginFallback
 
-echo "=== OpenClaw Railway Entrypoint v30 ==="
+echo "=== OpenClaw Railway Entrypoint v31 ==="
 echo "Starting at $(date -u)"
 
 # Directories
@@ -41,7 +41,8 @@ const config = {
     port: port,
     bind: 'lan',
     controlUi: {
-      enabled: true
+      enabled: true,
+      dangerouslyAllowHostHeaderOriginFallback: true
     }
   }
 };
