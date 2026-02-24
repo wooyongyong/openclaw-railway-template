@@ -1,7 +1,10 @@
 #!/bin/bash
 
-# v27 - Fix models: need both id and name fields
-echo "=== OpenClaw Railway Entrypoint v27 ==="
+# v28 - Config based on official OpenClaw docs (docs.openclaw.ai)
+# Key changes: use 'agent' (singular), Google is built-in provider,
+# no browser section needed, minimal config approach
+
+echo "=== OpenClaw Railway Entrypoint v28 ==="
 echo "Starting at $(date -u)"
 
 # Directories
@@ -16,7 +19,7 @@ CONFIG_FILE="$OPENCLAW_STATE_DIR/openclaw.json"
 # Resolve gateway port
 GW_PORT="${INTERNAL_GATEWAY_PORT:-8080}"
 
-# Build openclaw.json using node
+# Build openclaw.json using node (based on official config examples)
 echo "Building config..."
 node -e "
 const fs = require('fs');
@@ -25,46 +28,32 @@ const geminiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_KEY || '';
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_TOKEN || '';
 
 const config = {
+  agent: {
+    workspace: '/data/workspace',
+    model: {
+      primary: 'google/gemini-2.0-flash'
+    }
+  },
+  channels: {},
   gateway: {
     port: port,
     bind: 'lan',
     controlUi: {
-      dangerouslyDisableDeviceAuth: true,
-      allowInsecureAuth: true
-    },
-    trustedProxies: ['loopback', 'private', '100.64.0.0/10']
-  },
-  models: {
-    providers: {}
-  },
-  agents: {
-    defaults: {
-      model: {
-        primary: 'google/gemini-2.0-flash'
-      }
-    }
-  },
-  channels: {},
-  browser: {
-    defaultProfile: 'openclaw',
-    profiles: {
-      openclaw: {
-        color: '#FF6600',
-        cdpPort: 9222
-      }
+      enabled: true
     }
   }
 };
 
+// Set Gemini API key via env section if available
 if (geminiKey) {
-  config.models.providers.google = {
-    apiKey: geminiKey,
-    api: 'google-generative-ai',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-    models: [{ id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' }]
+  config.env = {
+    vars: {
+      GEMINI_API_KEY: geminiKey
+    }
   };
 }
 
+// Configure Telegram channel
 if (telegramToken) {
   config.channels.telegram = {
     enabled: true,
