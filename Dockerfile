@@ -1,51 +1,35 @@
 FROM node:22-bookworm
 
-# v4 - Force fresh build with Playwright deps
+# v5 - Simplified: No Homebrew, Playwright included
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
- ca-certificates \
- curl \
- git \
- gosu \
- procps \
- python3 \
- build-essential \
- && rm -rf /var/lib/apt/lists/*
+  ca-certificates \
+   curl \
+    git \
+     procps \
+      && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g openclaw@latest
+      # Install OpenClaw globally
+      RUN npm install -g openclaw@latest
 
-# Playwright + Chromium 시스템 의존성 한번에 설치
-RUN npx playwright install --with-deps chromium
+      # Install Playwright Chromium with system deps
+      ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
+      RUN npx playwright install --with-deps chromium \
+       && chmod -R 755 /opt/pw-browsers
 
-WORKDIR /app
+       # Create openclaw user and directories
+       RUN useradd -m -s /bin/bash openclaw \
+        && mkdir -p /data && chown openclaw:openclaw /data
 
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable && pnpm install --frozen-lockfile --prod
+        WORKDIR /app
+        COPY entrypoint.sh ./entrypoint.sh
+        RUN chmod +x ./entrypoint.sh && chown openclaw:openclaw ./entrypoint.sh
 
-COPY src ./src
-COPY entrypoint.sh ./entrypoint.sh
+        ENV PORT=8080
+        ENV OPENCLAW_ENTRY=/usr/local/lib/node_modules/openclaw/dist/entry.js
+        EXPOSE 8080
 
-RUN useradd -m -s /bin/bash openclaw \
- && chown -R openclaw:openclaw /app \
- && mkdir -p /data && chown openclaw:openclaw /data \
- && mkdir -p /home/linuxbrew/.linuxbrew && chown -R openclaw:openclaw /home/linuxbrew \
- && mkdir -p /root/.cache && chmod -R 777 /root/.cache
+        HEALTHCHECK --interval=30s --timeout=10s --start-period=30s \
+         CMD curl -f http://localhost:8080/setup/healthz || exit 1
 
-USER openclaw
-RUN NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
-ENV HOMEBREW_PREFIX="/home/linuxbrew/.linuxbrew"
-ENV HOMEBREW_CELLAR="/home/linuxbrew/.linuxbrew/Cellar"
-ENV HOMEBREW_REPOSITORY="/home/linuxbrew/.linuxbrew/Homebrew"
-ENV PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
-
-ENV PORT=8080
-ENV OPENCLAW_ENTRY=/usr/local/lib/node_modules/openclaw/dist/entry.js
-EXPOSE 8080
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
- CMD curl -f http://localhost:8080/setup/healthz || exit 1
-
-USER root
-ENTRYPOINT ["./entrypoint.sh"]
+         ENTRYPOINT ["./entrypoint.sh"]
