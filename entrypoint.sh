@@ -1,8 +1,7 @@
 #!/bin/bash
-set -e
 
-# v21 - No heredoc, uses node to build JSON config
-echo "=== OpenClaw Railway Entrypoint v21 ==="
+# v22 - Fixed: removed set -e, fixed HOME path
+echo "=== OpenClaw Railway Entrypoint v22 ==="
 echo "Starting at $(date -u)"
 
 # Directories
@@ -11,15 +10,13 @@ export OPENCLAW_WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
 export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/opt/pw-browsers}"
 mkdir -p "$OPENCLAW_STATE_DIR" "$OPENCLAW_WORKSPACE_DIR"
 
-# Config file
-CONFIG_DIR="$OPENCLAW_STATE_DIR"
-CONFIG_FILE="$CONFIG_DIR/openclaw.json"
-mkdir -p "$CONFIG_DIR"
+# Config file location
+CONFIG_FILE="$OPENCLAW_STATE_DIR/openclaw.json"
 
 # Resolve gateway port
 GW_PORT="${INTERNAL_GATEWAY_PORT:-8080}"
 
-# Build openclaw.json using node (no heredoc issues)
+# Build openclaw.json using node
 echo "Building config..."
 node -e "
 const fs = require('fs');
@@ -62,14 +59,15 @@ const config = {
                                                                                                         config.channels.telegram = { default: { botToken: telegramToken } };
                                                                                                         }
                                                                                                         
-                                                                                                        fs.writeFileSync('$CONFIG_FILE', JSON.stringify(config, null, 2));
-                                                                                                        console.log('Config written to $CONFIG_FILE');
-                                                                                                        "
+                                                                                                        const configPath = process.argv[1];
+                                                                                                        fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+                                                                                                        console.log('Config written to ' + configPath);
+                                                                                                        " "$CONFIG_FILE"
                                                                                                         
-                                                                                                        # Set HOME for openclaw CLI
-                                                                                                        export HOME="$OPENCLAW_STATE_DIR/.."
+                                                                                                        # Setup HOME and openclaw config directory
+                                                                                                        export HOME="/home/openclaw"
                                                                                                         mkdir -p "$HOME/.openclaw"
-                                                                                                        cp "$CONFIG_FILE" "$HOME/.openclaw/openclaw.json" 2>/dev/null || ln -sf "$CONFIG_FILE" "$HOME/.openclaw/openclaw.json"
+                                                                                                        cp "$CONFIG_FILE" "$HOME/.openclaw/openclaw.json" || true
                                                                                                         
                                                                                                         echo "Config ready at $CONFIG_FILE"
                                                                                                         echo "Browser profile: openclaw (headless Playwright)"
