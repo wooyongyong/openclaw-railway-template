@@ -1,12 +1,9 @@
 #!/bin/bash
 
-# v32 - Add headless Chromium + browser config for Playwright
-# Changes from v31:
-# 1. Start Chromium headless in background before gateway
-# 2. Add browser section to openclaw.json config
-# 3. Set defaultProfile to "openclaw" (managed browser)
+# v33 - Fix: add color to browser profile (required by schema)
+# Error was: browser.profiles.openclaw.color: expected string, received undefined
 
-echo "=== OpenClaw Railway Entrypoint v32 ==="
+echo "=== OpenClaw Railway Entrypoint v33 ==="
 echo "Starting at $(date -u)"
 
 # Directories
@@ -89,7 +86,8 @@ const config = {
     noSandbox: true,
     profiles: {
       openclaw: {
-        cdpUrl: 'http://127.0.0.1:18800'
+        cdpUrl: 'http://127.0.0.1:18800',
+        color: '#4A90D9'
       }
     }
   },
