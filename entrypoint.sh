@@ -1,9 +1,12 @@
 #!/bin/bash
 
-# v31 - Fix: add controlUi.dangerouslyAllowHostHeaderOriginFallback for non-loopback bind
-# Error was: non-loopback Control UI requires allowedOrigins or dangerouslyAllowHostHeaderOriginFallback
+# v32 - Add headless Chromium + browser config for Playwright
+# Changes from v31:
+# 1. Start Chromium headless in background before gateway
+# 2. Add browser section to openclaw.json config
+# 3. Set defaultProfile to "openclaw" (managed browser)
 
-echo "=== OpenClaw Railway Entrypoint v31 ==="
+echo "=== OpenClaw Railway Entrypoint v32 ==="
 echo "Starting at $(date -u)"
 
 # Directories
@@ -18,6 +21,48 @@ CONFIG_FILE="$OPENCLAW_STATE_DIR/openclaw.json"
 # Use PORT (matches Dockerfile healthcheck on 8080)
 GW_PORT="${PORT:-8080}"
 
+# Browser user data directory
+BROWSER_USER_DATA="$OPENCLAW_STATE_DIR/browser/openclaw/user-data"
+mkdir -p "$BROWSER_USER_DATA"
+
+# Start headless Chromium in background
+echo "Starting headless Chromium on port 18800..."
+CDP_PORT=18800
+
+# Find chromium binary
+CHROMIUM_BIN=""
+for bin in chromium-browser chromium google-chrome-stable google-chrome; do
+  if command -v "$bin" &>/dev/null; then
+    CHROMIUM_BIN="$bin"
+    break
+  fi
+done
+
+# Also check Playwright's chromium
+if [ -z "$CHROMIUM_BIN" ]; then
+  PW_CHROME=$(find "$PLAYWRIGHT_BROWSERS_PATH" -name "chrome" -type f 2>/dev/null | head -1)
+  if [ -n "$PW_CHROME" ]; then
+    CHROMIUM_BIN="$PW_CHROME"
+  fi
+fi
+
+if [ -n "$CHROMIUM_BIN" ]; then
+  echo "Found browser: $CHROMIUM_BIN"
+  "$CHROMIUM_BIN" \
+    --headless=new \
+    --no-sandbox \
+    --disable-gpu \
+    --disable-dev-shm-usage \
+    --remote-debugging-port=$CDP_PORT \
+    --user-data-dir="$BROWSER_USER_DATA" \
+    about:blank &
+  CHROMIUM_PID=$!
+  echo "Chromium started with PID $CHROMIUM_PID on CDP port $CDP_PORT"
+  sleep 2
+else
+  echo "WARNING: No Chromium binary found! Browser features will be unavailable."
+fi
+
 # Build openclaw.json using node
 echo "Building config..."
 node -e "
@@ -25,6 +70,8 @@ const fs = require('fs');
 const port = parseInt(process.env.PORT || '8080', 10);
 const geminiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_KEY || '';
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_TOKEN || '';
+const naverId = process.env.NAVER_ID || '';
+const naverPw = process.env.NAVER_PW || '';
 
 const config = {
   agents: {
@@ -36,6 +83,16 @@ const config = {
     }
   },
   channels: {},
+  browser: {
+    defaultProfile: 'openclaw',
+    headless: true,
+    noSandbox: true,
+    profiles: {
+      openclaw: {
+        cdpUrl: 'http://127.0.0.1:18800'
+      }
+    }
+  },
   gateway: {
     mode: 'local',
     port: port,
@@ -47,13 +104,14 @@ const config = {
   }
 };
 
-// Set Gemini API key via env section
-if (geminiKey) {
-  config.env = {
-    vars: {
-      GEMINI_API_KEY: geminiKey
-    }
-  };
+// Set API keys via env section
+const envVars = {};
+if (geminiKey) envVars.GEMINI_API_KEY = geminiKey;
+if (naverId) envVars.NAVER_ID = naverId;
+if (naverPw) envVars.NAVER_PW = naverPw;
+
+if (Object.keys(envVars).length > 0) {
+  config.env = { vars: envVars };
 }
 
 // Configure Telegram channel
@@ -76,6 +134,9 @@ console.log(JSON.stringify(config, null, 2));
 export HOME="/home/openclaw"
 mkdir -p "$HOME/.openclaw"
 cp "$CONFIG_FILE" "$HOME/.openclaw/openclaw.json" || true
+
+# Also setup browser user data in home
+mkdir -p "$HOME/.openclaw/browser/openclaw/user-data"
 
 echo "Config ready at $CONFIG_FILE"
 echo "Gateway port: $GW_PORT"
